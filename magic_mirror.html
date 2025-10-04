@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Magic Mirror Compliments</title>
+<style>
+  html,body {
+    margin: 0;
+    height: 100%;
+    width: 100%;
+    background: #000;
+    overflow: hidden;
+  }
+  .container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #scene {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+  }
+  .realvine {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    object-fit: contain;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0.94;
+    width: 110px;
+  }
+  .realvine.left {
+    left: 0;
+  }
+  .realvine.right {
+    right: 0;
+    transform: scaleX(-1);
+  }
+  #message {
+    position: absolute;
+    z-index: 4;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: "Georgia", serif;
+    font-size: 1em;
+    color: white;
+    text-shadow: 0 0 5px rgba(255,255,255,0.5);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.2s ease;
+    background: black;
+    padding: 0.25em 0.5em;
+    border-radius: 5px;
+    text-align: center;
+  }
+  #message.active {
+    transform: translate(-50%, -50%) scale(1.05);
+    animation: shimmer 0.8s ease forwards;
+  }
+  @keyframes shimmer {
+    0% { opacity: 0.8; text-shadow: 0 0 5px white; }
+    50% { opacity: 1; text-shadow: 0 0 15px white; }
+    100% { opacity: 0.9; text-shadow: 0 0 5px white; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Realistic vines on left and right (using a public PNG) -->
+  <img class="realvine left" src="https://www.pngwing.com/pngs/97/68/png-transparent-green-leafed-plant-vine-leaf-plant-leaf-vine-grape-vine-thumbnail.png" alt="Vine Left"/>
+  <img class="realvine right" src="https://www.pngwing.com/pngs/97/68/png-transparent-green-leafed-plant-vine-leaf-plant-leaf-vine-grape-vine-thumbnail.png" alt="Vine Right"/>
+  <img id="scene" 
+       src="data:image/png;base64,PUT-YOUR-FULL-BASE64-HERE"
+       alt="Pixel mirror on a beach sunset" />
+  <span id="message">You’re Adventurous!</span>
+</div>
+<script>
+(function(){
+  const msg = document.getElementById('message');
+  let audioCtx = null;
+
+  // 67 unique uplifting phrases, 5 with "ma lady", "dear lady", or "madam"
+  let phrases = [
+    "Your smile brightens every room you enter.",
+    "You have a heart full of kindness.",
+    "Your laughter is a melody I could listen to forever.",
+    "You inspire those around you to be better.",
+    "Your creativity knows no bounds.",
+    "You radiate warmth and positivity.",
+    "You bring out the best in people.",
+    "Your eyes hold stories I’d love to hear.",
+    "Your presence feels like a gentle hug.",
+    "You have an elegance that can't be taught.",
+    "Your words are always thoughtful and sincere.",
+    "You make ordinary moments extraordinary.",
+    "Your strength is awe-inspiring.",
+    "You light up even the cloudiest days.",
+    "Your energy is beautifully contagious.",
+    "You have a soul that shines brightly.",
+    "You’re a wonderful listener and friend.",
+    "Your style is effortlessly charming.",
+    "You have a wisdom beyond your years.",
+    "You’re the definition of grace.",
+    "Your generosity touches many lives.",
+    "You turn dreams into reality.",
+    "You see beauty where others might miss it.",
+    "You are a breath of fresh air.",
+    "Your optimism is truly uplifting.",
+    "Your passion ignites inspiration.",
+    "You have impeccable taste.",
+    "You bring calm to every storm.",
+    "You are a rare and precious gem.",
+    "Your kindness is a light in the world.",
+    "You make every moment feel special.",
+    "You’re endlessly fascinating.",
+    "Your laughter makes all worries disappear.",
+    "You have a magnetic personality.",
+    "You’re a muse to those who know you.",
+    "Your heart is pure gold.",
+    "You’re the sunshine after the rain.",
+    "You have a way with words that’s enchanting.",
+    "Your thoughtfulness never goes unnoticed.",
+    "You make the world a better place by being in it.",
+    "You’re a true original.",
+    "Your curiosity is captivating.",
+    "You turn simple days into adventures.",
+    "You are effortlessly radiant.",
+    "You are the calm in my chaos.",
+    "Your smile is my favorite sight.",
+    "You’re the heartbeat of happiness.",
+    "Your soul is a work of art.",
+    "You are loved more than you know.",
+    "You have a spirit that’s wild and free.",
+    "You’re my favorite kind of magic.",
+    "You make even silence feel comfortable.",
+    "You’re unforgettable.",
+    "Your sincerity is refreshing.",
+    "You have an inner beauty that glows.",
+    "You’re a light in the darkness.",
+    "Your courage is remarkable.",
+    "You make love look effortless.",
+    "You turn ordinary to extraordinary.",
+    "You make every moment brighter.",
+    "You’re a beautiful chapter in my story.",
+    "You’re the melody to my favorite song.",
+    "You’re the reason for so many smiles.",
+    "You are, without a doubt, amazing.",
+    // Special "ma lady", "dear lady", "madam" phrases:
+    "You have the grace of a true ma lady.",
+    "Your beauty is unmatched, dear lady.",
+    "You inspire elegance wherever you go, madam.",
+    "Ma lady, your kindness knows no limits.",
+    "You are the definition of charm, madam."
+  ];
+
+  let unused = [...phrases];
+
+  function nextPhrase() {
+    if (unused.length === 0) {
+      unused = [...phrases]; // reset when all are used
+    }
+    const i = Math.floor(Math.random() * unused.length);
+    const phrase = unused.splice(i, 1)[0];
+    return phrase;
+  }
+
+  function ensureAudioContext(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioCtx;
+  }
+
+  // Sparkle Sweep: Soft Sweep Up
+  function playDing(){
+    const ctx = ensureAudioContext();
+    const now = ctx.currentTime;
+
+    const master = ctx.createGain();
+    master.connect(ctx.destination);
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.linearRampToValueAtTime(0.18, now + 0.05);
+    master.gain.linearRampToValueAtTime(0.0001, now + 0.7);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(350, now);
+    osc.frequency.linearRampToValueAtTime(850, now + 0.6);
+
+    osc.connect(master);
+    osc.start(now);
+    osc.stop(now + 0.7);
+  }
+
+  msg.addEventListener('click', async () => {
+    const ctx = ensureAudioContext();
+    if(ctx.state === 'suspended') await ctx.resume();
+    msg.classList.remove('active');
+    void msg.offsetWidth;
+    msg.classList.add('active');
+    playDing();
+    msg.textContent = nextPhrase();
+  });
+})();
+</script>
+</body>
+</html>
